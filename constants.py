@@ -1,0 +1,11 @@
+# Constants extracted from main.py
+TARGET_RATE = 16000
+FRAME_MS = 30
+VAD_MODE = 3
+MAX_SILENCE_MS = 400
+PARTIAL_INTERVAL_MS = 2000
+CLEAR_TIMEOUT_MS = 6000
+MODEL_NAME = "nvidia/parakeet-tdt-0.6b-v2"
+MAX_LINES = 3
+HISTORY_LINES = 50
+HISTORY_FILE = "history.txt"
