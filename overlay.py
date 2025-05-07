@@ -65,6 +65,14 @@ class ConfigDialog(QDialog):
         self.partSpin.setRange(1, 10000)
         self.partSpin.setValue(settings['partial_interval_ms'])
         layout.addRow("Partial Interval Ms:", self.partSpin)
+        self.minFrameSpin = QSpinBox()
+        self.minFrameSpin.setRange(1, 10000)
+        self.minFrameSpin.setValue(settings.get('min_frames', MIN_FRAMES))
+        layout.addRow("Min Frames:", self.minFrameSpin)
+        self.maxFrameSpin = QSpinBox()
+        self.maxFrameSpin.setRange(1, 100000)
+        self.maxFrameSpin.setValue(settings.get('max_frames', MAX_FRAMES))
+        layout.addRow("Max Frames:", self.maxFrameSpin)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -78,7 +86,9 @@ class ConfigDialog(QDialog):
             'vad_mode': self.vadSpin.value(),
             'frame_ms': self.frameSpin.value(),
             'max_silence_ms': self.maxSilSpin.value(),
-            'partial_interval_ms': self.partSpin.value()
+            'partial_interval_ms': self.partSpin.value(),
+            'min_frames': self.minFrameSpin.value(),
+            'max_frames': self.maxFrameSpin.value()
         }
 
 class Overlay(QWidget):
@@ -91,7 +101,9 @@ class Overlay(QWidget):
             'vad_mode': VAD_MODE,
             'frame_ms': FRAME_MS,
             'max_silence_ms': MAX_SILENCE_MS,
-            'partial_interval_ms': PARTIAL_INTERVAL_MS
+            'partial_interval_ms': PARTIAL_INTERVAL_MS,
+            'min_frames': MIN_FRAMES,
+            'max_frames': MAX_FRAMES
         }
         self.text_q = queue.Queue()
         self.transcriber = None
@@ -247,7 +259,9 @@ class Overlay(QWidget):
             self.settings['vad_mode'],
             self.settings['frame_ms'],
             self.settings['max_silence_ms'],
-            self.settings['partial_interval_ms']
+            self.settings['partial_interval_ms'],
+            self.settings['min_frames'],
+            self.settings['max_frames']
         )
         self.transcriber.start()
 
