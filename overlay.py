@@ -2,11 +2,11 @@ import os
 import queue
 import sounddevice as sd
 import nemo.collections.asr as nemo_asr
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QPlainTextEdit, QDialog, QListWidget, QAbstractItemView, QDialogButtonBox, QMenu
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QPlainTextEdit, QDialog, QListWidget, QAbstractItemView, QDialogButtonBox, QMenu, QSpinBox, QLabel, QFormLayout
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction
 
-from constants import HISTORY_LINES, HISTORY_FILE, MAX_LINES, CLEAR_TIMEOUT_MS, MODEL_NAME
+from constants import HISTORY_LINES, HISTORY_FILE, MAX_LINES, CLEAR_TIMEOUT_MS, MODEL_NAME, VAD_MODE, FRAME_MS, MAX_SILENCE_MS, PARTIAL_INTERVAL_MS
 from transcriber import VADTranscriber
 
 class InputDeviceDialog(QDialog):
@@ -32,9 +32,67 @@ class InputDeviceDialog(QDialog):
         item = self.list_widget.currentItem()
         return int(item.text().split('#')[-1].rstrip(')')) if item else None
 
+class ConfigDialog(QDialog):
+    def __init__(self, parent, settings):
+        super().__init__(parent)
+        self.setWindowTitle("Settings")
+        layout = QFormLayout(self)
+        self.maxSpin = QSpinBox()
+        self.maxSpin.setRange(1, 100)
+        self.maxSpin.setValue(settings['max_lines'])
+        layout.addRow("Max Lines:", self.maxSpin)
+        self.histSpin = QSpinBox()
+        self.histSpin.setRange(1, 500)
+        self.histSpin.setValue(settings['history_lines'])
+        layout.addRow("History Lines:", self.histSpin)
+        self.clearSpin = QSpinBox()
+        self.clearSpin.setRange(100, 10000)
+        self.clearSpin.setValue(settings['clear_timeout'])
+        layout.addRow("Clear Timeout (ms):", self.clearSpin)
+        self.vadSpin = QSpinBox()
+        self.vadSpin.setRange(0, 3)
+        self.vadSpin.setValue(settings['vad_mode'])
+        layout.addRow("VAD Mode:", self.vadSpin)
+        self.frameSpin = QSpinBox()
+        self.frameSpin.setRange(1, 1000)
+        self.frameSpin.setValue(settings['frame_ms'])
+        layout.addRow("Frame Ms:", self.frameSpin)
+        self.maxSilSpin = QSpinBox()
+        self.maxSilSpin.setRange(1, 5000)
+        self.maxSilSpin.setValue(settings['max_silence_ms'])
+        layout.addRow("Max Silence Ms:", self.maxSilSpin)
+        self.partSpin = QSpinBox()
+        self.partSpin.setRange(1, 10000)
+        self.partSpin.setValue(settings['partial_interval_ms'])
+        layout.addRow("Partial Interval Ms:", self.partSpin)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def getValues(self):
+        return {
+            'max_lines': self.maxSpin.value(),
+            'history_lines': self.histSpin.value(),
+            'clear_timeout': self.clearSpin.value(),
+            'vad_mode': self.vadSpin.value(),
+            'frame_ms': self.frameSpin.value(),
+            'max_silence_ms': self.maxSilSpin.value(),
+            'partial_interval_ms': self.partSpin.value()
+        }
+
 class Overlay(QWidget):
     def __init__(self):
         super().__init__()
+        self.settings = {
+            'max_lines': MAX_LINES,
+            'history_lines': HISTORY_LINES,
+            'clear_timeout': CLEAR_TIMEOUT_MS,
+            'vad_mode': VAD_MODE,
+            'frame_ms': FRAME_MS,
+            'max_silence_ms': MAX_SILENCE_MS,
+            'partial_interval_ms': PARTIAL_INTERVAL_MS
+        }
         self.text_q = queue.Queue()
         self.transcriber = None
         self.current = None
@@ -70,13 +128,19 @@ class Overlay(QWidget):
         self.text = QPlainTextEdit(readOnly=True)
         self.text.setFont(font)
         self.text.setStyleSheet("background:rgba(0,0,0,0.7); color:white; border:none;")
-        self.text.document().setMaximumBlockCount(MAX_LINES)
+        self.text.document().setMaximumBlockCount(self.settings['max_lines'])
+        self.text.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.text.customContextMenuRequested.connect(self._show_context_menu)
         layout.addWidget(self.text)
 
-        h = self.text.fontMetrics().lineSpacing() * MAX_LINES + 24
+        h = self.text.fontMetrics().lineSpacing() * self.settings['max_lines'] + 24
         self.resize(480, h)
 
-    def contextMenuEvent(self, event):
+    def _show_context_menu(self, pos):
+        globalPos = self.text.mapToGlobal(pos)
+        self._open_context_menu(globalPos)
+
+    def _open_context_menu(self, globalPos):
         menu = QMenu(self)
         select_act = menu.addAction("Select Audio Input...")
         menu.addSeparator()
@@ -84,22 +148,55 @@ class Overlay(QWidget):
         history_act.setCheckable(True)
         history_act.setChecked(self.show_history)
         menu.addAction(history_act)
-
-        action = menu.exec(event.globalPos())
+        clear_hist_act = menu.addAction("Clear History")
+        config_act = menu.addAction("Configure...")
+        action = menu.exec(globalPos)
         if action == select_act:
             self._choose_inputs()
         elif action == history_act:
             self.show_history = history_act.isChecked()
             if self.show_history:
                 self.clear_timer.stop()
-                self.text.document().setMaximumBlockCount(HISTORY_LINES + 1)
+                self.text.document().setMaximumBlockCount(self.settings['history_lines'] + 1)
                 self._load_history_lines()
                 self._render_history()
             else:
-                self.text.document().setMaximumBlockCount(MAX_LINES)
-                self.clear_timer.start(CLEAR_TIMEOUT_MS)
+                self.text.document().setMaximumBlockCount(self.settings['max_lines'])
+                self.clear_timer.start(self.settings['clear_timeout'])
                 self._render_live()
+        elif action == clear_hist_act:
+            try:
+                os.remove(HISTORY_FILE)
+            except:
+                pass
+            self.history_lines = []
+            self.text.clear()
+        elif action == config_act:
+            dlg = ConfigDialog(self, self.settings)
+            if dlg.exec() == QDialog.Accepted:
+                self.settings.update(dlg.getValues())
+                self._apply_settings()
+
+    def contextMenuEvent(self, event):
+        self._open_context_menu(event.globalPos())
         return super().contextMenuEvent(event)
+
+    def _apply_settings(self):
+        self.text.document().setMaximumBlockCount(self.settings['max_lines'])
+        h = self.text.fontMetrics().lineSpacing() * self.settings['max_lines'] + 24
+        self.resize(480, h)
+        self.clear_timer.setInterval(self.settings['clear_timeout'])
+        self._restart_transcriber(self.devices)
+        # reload history view if enabled after config changes
+        if self.show_history:
+            self.clear_timer.stop()
+            self.text.document().setMaximumBlockCount(self.settings['history_lines'] + 1)
+            self._load_history_lines()
+            self._render_history()
+        else:
+            self.text.document().setMaximumBlockCount(self.settings['max_lines'])
+            self.clear_timer.start(self.settings['clear_timeout'])
+            self._render_live()
 
     def _load_history_lines(self):
         self.history_lines = []
@@ -107,7 +204,7 @@ class Overlay(QWidget):
             try:
                 with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
                     lines = f.read().splitlines()
-                self.history_lines = lines[-HISTORY_LINES:]
+                self.history_lines = lines[-self.settings['history_lines']:]
             except Exception as e:
                 print("Could not load history:", e)
 
@@ -119,7 +216,7 @@ class Overlay(QWidget):
 
     def _render_live(self):
         self.text.clear()
-        num_hist = MAX_LINES - 1 if self.partial_text else MAX_LINES
+        num_hist = self.settings['max_lines'] - 1 if self.partial_text else self.settings['max_lines']
         hist_to_show = self.history_lines[-num_hist:] if num_hist > 0 else []
         for line in hist_to_show:
             self.text.appendPlainText(line)
@@ -143,7 +240,15 @@ class Overlay(QWidget):
         self.devices = devices
         self.history_lines = []
         self.partial_text = ""
-        self.transcriber = VADTranscriber(self.text_q, devices, self.asr_model)
+        self.transcriber = VADTranscriber(
+            self.text_q,
+            devices,
+            self.asr_model,
+            self.settings['vad_mode'],
+            self.settings['frame_ms'],
+            self.settings['max_silence_ms'],
+            self.settings['partial_interval_ms']
+        )
         self.transcriber.start()
 
     def _start_poll(self):
@@ -153,7 +258,7 @@ class Overlay(QWidget):
 
     def _append_history(self, text: str) -> None:
         self.history_lines.append(text)
-        if len(self.history_lines) > HISTORY_LINES:
+        if len(self.history_lines) > self.settings['history_lines']:
             self.history_lines.pop(0)
         try:
             with open(HISTORY_FILE, 'a', encoding='utf-8') as f:
@@ -180,7 +285,7 @@ class Overlay(QWidget):
             else:
                 self._render_live()
             self.clear_timer.stop()
-            self.clear_timer.start(CLEAR_TIMEOUT_MS)
+            self.clear_timer.start(self.settings['clear_timeout'])
 
     def _clear(self):
         if not self.show_history:

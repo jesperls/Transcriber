@@ -16,12 +16,13 @@ import nemo.collections.asr as nemo_asr
 from scipy.io.wavfile import write as wav_write
 
 class VADTranscriber(threading.Thread):
-    def __init__(self, text_queue: queue.Queue, devices: List[int], model) -> None:
+    def __init__(self, text_queue: queue.Queue, devices: List[int], model, vad_mode: int = VAD_MODE, frame_ms: int = FRAME_MS, max_silence_ms: int = MAX_SILENCE_MS, partial_interval_ms: int = PARTIAL_INTERVAL_MS) -> None:
         super().__init__(daemon=True)
         self.text_q = text_queue
-        self.vad = webrtcvad.Vad(VAD_MODE)
-        self.max_silence = int(MAX_SILENCE_MS / FRAME_MS)
-        self.partial_frames = int(PARTIAL_INTERVAL_MS / FRAME_MS)
+        self.vad = webrtcvad.Vad(vad_mode)
+        self.frame_ms = frame_ms
+        self.max_silence = int(max_silence_ms / frame_ms)
+        self.partial_frames = int(partial_interval_ms / frame_ms)
         self.model = model
         self.audio_q = queue.Queue()
         self.running = False
@@ -42,7 +43,7 @@ class VADTranscriber(threading.Thread):
             for dev in self.devices:
                 info = sd.query_devices(dev)
                 dev_rate = int(info['default_samplerate'])
-                blocksize = int(dev_rate * FRAME_MS / 1000)
+                blocksize = int(dev_rate * self.frame_ms / 1000)
                 stack.enter_context(sd.InputStream(
                     samplerate=dev_rate,
                     channels=1,
