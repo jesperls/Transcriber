@@ -1,0 +1,19 @@
+{
+  "max_lines": 4,
+  "history_lines": 50,
+  "clear_timeout": 6000,
+  "vad_mode": 2,
+  "frame_ms": 30,
+  "max_silence_ms": 150,
+  "partial_interval_ms": 2000,
+  "min_frames": 15,
+  "max_frames": 150,
+  "appearance": {
+    "font_size": 20,
+    "opacity": 0.1,
+    "font_family": "Adwaita Mono",
+    "background_color": "rgba(0,0,0,0.7)",
+    "text_color": "#FFFFFF"
+  },
+  "input_device": 32
+}
