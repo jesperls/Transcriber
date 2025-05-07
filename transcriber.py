@@ -8,15 +8,18 @@ import sounddevice as sd
 
 from utils import resample_pcm
 from constants import TARGET_RATE, FRAME_MS, VAD_MODE, MAX_SILENCE_MS, PARTIAL_INTERVAL_MS
-from typing import List, Tuple, Dict
+from typing import List, Dict
 
 import numpy as np
 import webrtcvad
-import nemo.collections.asr as nemo_asr
 from scipy.io.wavfile import write as wav_write
 
 class VADTranscriber(threading.Thread):
-    def __init__(self, text_queue: queue.Queue, devices: List[int], model, vad_mode: int = VAD_MODE, frame_ms: int = FRAME_MS, max_silence_ms: int = MAX_SILENCE_MS, partial_interval_ms: int = PARTIAL_INTERVAL_MS) -> None:
+    def __init__(self, text_queue: queue.Queue, devices: List[int], model,
+                 vad_mode: int = VAD_MODE,
+                 frame_ms: int = FRAME_MS,
+                 max_silence_ms: int = MAX_SILENCE_MS,
+                 partial_interval_ms: int = PARTIAL_INTERVAL_MS) -> None:
         super().__init__(daemon=True)
         self.text_q = text_queue
         self.vad = webrtcvad.Vad(vad_mode)

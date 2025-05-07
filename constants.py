@@ -1,4 +1,3 @@
-# Constants extracted from main.py
 TARGET_RATE = 16000
 FRAME_MS = 30
 VAD_MODE = 3

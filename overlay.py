@@ -2,11 +2,11 @@ import os
 import queue
 import sounddevice as sd
 import nemo.collections.asr as nemo_asr
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QPlainTextEdit, QDialog, QListWidget, QAbstractItemView, QDialogButtonBox, QMenu, QSpinBox, QLabel, QFormLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QPlainTextEdit, QDialog, QListWidget, QAbstractItemView, QDialogButtonBox, QMenu, QSpinBox, QFormLayout
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction
 
-from constants import HISTORY_LINES, HISTORY_FILE, MAX_LINES, CLEAR_TIMEOUT_MS, MODEL_NAME, VAD_MODE, FRAME_MS, MAX_SILENCE_MS, PARTIAL_INTERVAL_MS
+from constants import *
 from transcriber import VADTranscriber
 
 class InputDeviceDialog(QDialog):
