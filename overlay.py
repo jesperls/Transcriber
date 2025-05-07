@@ -151,6 +151,16 @@ class Overlay(QWidget):
         timer.timeout.connect(self._poll)
         timer.start(100)
 
+    def _append_history(self, text: str) -> None:
+        self.history_lines.append(text)
+        if len(self.history_lines) > HISTORY_LINES:
+            self.history_lines.pop(0)
+        try:
+            with open(HISTORY_FILE, 'a', encoding='utf-8') as f:
+                f.write(text + '\n')
+        except Exception as e:
+            print(f"Could not write history: {e}")
+
     def _poll(self):
         updated = False
         while not self.text_q.empty():
@@ -158,14 +168,7 @@ class Overlay(QWidget):
             txt, final, seg = item['text'], item['final'], item['id']
             txt = ' '.join(txt.split())
             if final:
-                self.history_lines.append(txt)
-                if len(self.history_lines) > HISTORY_LINES:
-                    self.history_lines.pop(0)
-                try:
-                    with open(HISTORY_FILE, 'a', encoding='utf-8') as f:
-                        f.write(txt + '\n')
-                except Exception as e:
-                    print("Could not write history:", e)
+                self._append_history(txt)
                 self.partial_text = ''
             else:
                 self.partial_text = txt
