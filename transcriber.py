@@ -1,27 +1,30 @@
 import os
 import queue
 import threading
+import logging
+from concurrent.futures import ThreadPoolExecutor
 import tempfile
 import contextlib
-import re
-import sounddevice as sd
 
 from utils import resample_pcm
-from constants import TARGET_RATE, FRAME_MS, VAD_MODE, MAX_SILENCE_MS, PARTIAL_INTERVAL_MS, MIN_FRAMES, MAX_FRAMES
+import constants
 from typing import List, Dict
 
 import numpy as np
 import webrtcvad
 from scipy.io.wavfile import write as wav_write
+import sounddevice as sd
+
+logger = logging.getLogger(__name__)
 
 class VADTranscriber(threading.Thread):
     def __init__(self, text_queue: queue.Queue, devices: List[int], model,
-                 vad_mode: int = VAD_MODE,
-                 frame_ms: int = FRAME_MS,
-                 max_silence_ms: int = MAX_SILENCE_MS,
-                 partial_interval_ms: int = PARTIAL_INTERVAL_MS,
-                 min_frames: int = MIN_FRAMES,
-                 max_frames: int = MAX_FRAMES) -> None:
+                 vad_mode: int = constants.VAD_MODE,
+                 frame_ms: int = constants.FRAME_MS,
+                 max_silence_ms: int = constants.MAX_SILENCE_MS,
+                 partial_interval_ms: int = constants.PARTIAL_INTERVAL_MS,
+                 min_frames: int = constants.MIN_FRAMES,
+                 max_frames: int = constants.MAX_FRAMES) -> None:
         super().__init__(daemon=True)
         self.text_q = text_queue
         self.vad = webrtcvad.Vad(vad_mode)
@@ -35,11 +38,13 @@ class VADTranscriber(threading.Thread):
         self.running = False
         self.segment = 0
         self.devices = devices
+        # executor for transcribe tasks
+        self.executor = ThreadPoolExecutor(max_workers=2)
 
     def _audio_callback_factory(self, rate: int):
         def callback(indata: np.ndarray, frames: int, time_info: Dict, status) -> None:
             if status:
-                print(f"Audio stream status: {status}")
+                logger.warning("Audio stream status: %s", status)
             pcm = indata.copy().flatten()
             self.audio_q.put((pcm, rate))
         return callback
@@ -106,26 +111,27 @@ class VADTranscriber(threading.Thread):
                     pcm, rate = self.audio_q.get(timeout=0.5)
                 except queue.Empty:
                     continue
-                pcm_rs = resample_pcm(pcm.astype(np.int16), rate, TARGET_RATE)
-                is_speech = self.vad.is_speech(pcm_rs.tobytes(), sample_rate=TARGET_RATE)
+                pcm_rs = resample_pcm(pcm.astype(np.int16), rate, constants.TARGET_RATE)
+                is_speech = self.vad.is_speech(pcm_rs.tobytes(), sample_rate=constants.TARGET_RATE)
                 self._process_frame(pcm_rs, is_speech)
 
     def _enqueue_transcription(self, buffer: List[np.ndarray], final: bool) -> None:
         """Spawn a thread to process and transcribe buffered audio."""
         data = np.concatenate(buffer)
         seg_id = self.segment
-        threading.Thread(target=self._transcribe, args=(data, final, seg_id), daemon=True).start()
+        # submit transcription to executor
+        self.executor.submit(self._transcribe, data, final, seg_id)
 
     def _transcribe(self, data: np.ndarray, final: bool, seg_id: int) -> None:
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-            wav_write(f.name, TARGET_RATE, data)
+            wav_write(f.name, constants.TARGET_RATE, data)
             path = f.name
         try:
             text = self.model.transcribe([path], verbose=False)[0].text.strip()
             # always enqueue transcription
             self.text_q.put({'text': text, 'final': final, 'id': seg_id})
         except Exception as e:
-            print(f"ASR error: {e}")
+            logger.error("ASR error: %s", e)
         finally:
             os.remove(path)
 

@@ -1,5 +1,5 @@
 {
-  "max_lines": 4,
+  "max_lines": 3,
   "history_lines": 50,
   "clear_timeout": 6000,
   "vad_mode": 2,
@@ -9,9 +9,9 @@
   "min_frames": 15,
   "max_frames": 150,
   "appearance": {
-    "font_size": 20,
-    "opacity": 0.1,
-    "font_family": "Adwaita Mono",
+    "font_size": 18,
+    "opacity": 0.6,
+    "font_family": "JetBrainsMono Nerd Font",
     "background_color": "rgba(0,0,0,0.7)",
     "text_color": "#FFFFFF"
   },

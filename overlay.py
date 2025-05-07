@@ -6,9 +6,13 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QPlainTextEdit, QDialog, QLi
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QFont
 
+import logging
 import settings
-from constants import *
+import constants
 from transcriber import VADTranscriber
+
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
 
 class InputDeviceDialog(QDialog):
     def __init__(self, parent=None):
@@ -40,39 +44,39 @@ class ConfigDialog(QDialog):
         layout = QFormLayout(self)
         self.maxSpin = QSpinBox()
         self.maxSpin.setRange(1, 100)
-        self.maxSpin.setValue(settings['max_lines'])
+        self.maxSpin.setValue(settings.max_lines)
         layout.addRow("Max Lines:", self.maxSpin)
         self.histSpin = QSpinBox()
         self.histSpin.setRange(1, 500)
-        self.histSpin.setValue(settings['history_lines'])
+        self.histSpin.setValue(settings.history_lines)
         layout.addRow("History Lines:", self.histSpin)
         self.clearSpin = QSpinBox()
         self.clearSpin.setRange(100, 10000)
-        self.clearSpin.setValue(settings['clear_timeout'])
+        self.clearSpin.setValue(settings.clear_timeout)
         layout.addRow("Clear Timeout (ms):", self.clearSpin)
         self.vadSpin = QSpinBox()
         self.vadSpin.setRange(0, 3)
-        self.vadSpin.setValue(settings['vad_mode'])
+        self.vadSpin.setValue(settings.vad_mode)
         layout.addRow("VAD Mode:", self.vadSpin)
         self.frameSpin = QSpinBox()
         self.frameSpin.setRange(1, 1000)
-        self.frameSpin.setValue(settings['frame_ms'])
+        self.frameSpin.setValue(settings.frame_ms)
         layout.addRow("Frame Ms:", self.frameSpin)
         self.maxSilSpin = QSpinBox()
         self.maxSilSpin.setRange(1, 5000)
-        self.maxSilSpin.setValue(settings['max_silence_ms'])
+        self.maxSilSpin.setValue(settings.max_silence_ms)
         layout.addRow("Max Silence Ms:", self.maxSilSpin)
         self.partSpin = QSpinBox()
         self.partSpin.setRange(1, 10000)
-        self.partSpin.setValue(settings['partial_interval_ms'])
+        self.partSpin.setValue(settings.partial_interval_ms)
         layout.addRow("Partial Interval Ms:", self.partSpin)
         self.minFrameSpin = QSpinBox()
         self.minFrameSpin.setRange(1, 10000)
-        self.minFrameSpin.setValue(settings.get('min_frames', MIN_FRAMES))
+        self.minFrameSpin.setValue(settings.min_frames)
         layout.addRow("Min Frames:", self.minFrameSpin)
         self.maxFrameSpin = QSpinBox()
         self.maxFrameSpin.setRange(1, 100000)
-        self.maxFrameSpin.setValue(settings.get('max_frames', MAX_FRAMES))
+        self.maxFrameSpin.setValue(settings.max_frames)
         layout.addRow("Max Frames:", self.maxFrameSpin)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -98,22 +102,22 @@ class AppearanceDialog(QDialog):
         self.setWindowTitle("Appearance Settings")
         layout = QFormLayout(self)
         self.fontCombo = QFontComboBox()
-        self.fontCombo.setCurrentFont(QFont(appearance.get('font_family', 'Courier')))
+        self.fontCombo.setCurrentFont(QFont(appearance.font_family))
         layout.addRow("Font Family:", self.fontCombo)
         self.fontSpin = QSpinBox()
         self.fontSpin.setRange(6, 72)
-        self.fontSpin.setValue(appearance.get('font_size', 16))
+        self.fontSpin.setValue(appearance.font_size)
         layout.addRow("Font Size:", self.fontSpin)
         self.opacitySpin = QDoubleSpinBox()
         self.opacitySpin.setRange(0.1, 1.0)
         self.opacitySpin.setSingleStep(0.1)
-        self.opacitySpin.setValue(appearance.get('opacity', 0.8))
+        self.opacitySpin.setValue(appearance.opacity)
         layout.addRow("Opacity:", self.opacitySpin)
         self.bgEdit = QLineEdit()
-        self.bgEdit.setText(appearance.get('background_color', 'rgba(0,0,0,0.7)'))
+        self.bgEdit.setText(appearance.background_color)
         layout.addRow("Background Color:", self.bgEdit)
         self.textEdit = QLineEdit()
-        self.textEdit.setText(appearance.get('text_color', '#FFFFFF'))
+        self.textEdit.setText(appearance.text_color)
         layout.addRow("Text Color:", self.textEdit)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -142,9 +146,9 @@ class Overlay(QWidget):
         self.partial_text = ""
         self._setup_ui()
 
-        self.asr_model = nemo_asr.models.ASRModel.from_pretrained(model_name=MODEL_NAME)
+        self.asr_model = nemo_asr.models.ASRModel.from_pretrained(model_name=constants.MODEL_NAME)
         # restore input device
-        saved_dev = self.settings.get('input_device')
+        saved_dev = self.settings.input_device
         default = sd.default.device
         fallback = default[0] if isinstance(default, (list, tuple)) else default
         self._restart_transcriber([saved_dev if saved_dev is not None else fallback])
@@ -172,12 +176,12 @@ class Overlay(QWidget):
         self.text = QPlainTextEdit(readOnly=True)
         self.text.setFont(font)
         self.text.setStyleSheet("background:rgba(0,0,0,0.7); color:white; border:none;")
-        self.text.document().setMaximumBlockCount(self.settings['max_lines'])
+        self.text.document().setMaximumBlockCount(self.settings.max_lines)
         self.text.setContextMenuPolicy(Qt.CustomContextMenu)
         self.text.customContextMenuRequested.connect(self._show_context_menu)
         layout.addWidget(self.text)
 
-        h = self.text.fontMetrics().lineSpacing() * self.settings['max_lines'] + 24
+        h = self.text.fontMetrics().lineSpacing() * self.settings.max_lines + 24
         self.resize(480, h)
 
     def _show_context_menu(self, pos):
@@ -199,26 +203,26 @@ class Overlay(QWidget):
         if action == select_act:
             self._choose_inputs()
         elif action == appearance_act:
-            dlg = AppearanceDialog(self, self.settings.get('appearance', {}))
+            dlg = AppearanceDialog(self, self.settings.appearance)
             if dlg.exec() == QDialog.Accepted:
                 vals = dlg.getValues()
-                self.settings['appearance'] = vals
+                for k, v in vals.items(): setattr(self.settings.appearance, k, v)
                 settings.save_settings(self.settings)
                 self._apply_appearance()
         elif action == history_act:
             self.show_history = history_act.isChecked()
             if self.show_history:
                 self.clear_timer.stop()
-                self.text.document().setMaximumBlockCount(self.settings['history_lines'] + 1)
+                self.text.document().setMaximumBlockCount(self.settings.history_lines + 1)
                 self._load_history_lines()
                 self._render_history()
             else:
-                self.text.document().setMaximumBlockCount(self.settings['max_lines'])
-                self.clear_timer.start(self.settings['clear_timeout'])
+                self.text.document().setMaximumBlockCount(self.settings.max_lines)
+                self.clear_timer.start(self.settings.clear_timeout)
                 self._render_live()
         elif action == clear_hist_act:
             try:
-                os.remove(HISTORY_FILE)
+                os.remove(constants.HISTORY_FILE)
             except:
                 pass
             self.history_lines = []
@@ -226,7 +230,8 @@ class Overlay(QWidget):
         elif action == config_act:
             dlg = ConfigDialog(self, self.settings)
             if dlg.exec() == QDialog.Accepted:
-                self.settings.update(dlg.getValues())
+                vals = dlg.getValues()
+                for k, v in vals.items(): setattr(self.settings, k, v)
                 self._apply_settings()
 
     def contextMenuEvent(self, event):
@@ -234,32 +239,32 @@ class Overlay(QWidget):
         return super().contextMenuEvent(event)
 
     def _apply_settings(self):
-        self.text.document().setMaximumBlockCount(self.settings['max_lines'])
-        h = self.text.fontMetrics().lineSpacing() * self.settings['max_lines'] + 24
+        self.text.document().setMaximumBlockCount(self.settings.max_lines)
+        h = self.text.fontMetrics().lineSpacing() * self.settings.max_lines + 24
         self.resize(480, h)
-        self.clear_timer.setInterval(self.settings['clear_timeout'])
+        self.clear_timer.setInterval(self.settings.clear_timeout)
         self._restart_transcriber(self.devices)
         settings.save_settings(self.settings)
         # reload history view if enabled after config changes
         if self.show_history:
             self.clear_timer.stop()
-            self.text.document().setMaximumBlockCount(self.settings['history_lines'] + 1)
+            self.text.document().setMaximumBlockCount(self.settings.history_lines + 1)
             self._load_history_lines()
             self._render_history()
         else:
-            self.text.document().setMaximumBlockCount(self.settings['max_lines'])
-            self.clear_timer.start(self.settings['clear_timeout'])
+            self.text.document().setMaximumBlockCount(self.settings.max_lines)
+            self.clear_timer.start(self.settings.clear_timeout)
             self._render_live()
 
     def _load_history_lines(self):
         self.history_lines = []
-        if os.path.exists(HISTORY_FILE):
+        if os.path.exists(constants.HISTORY_FILE):
             try:
-                with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                with open(constants.HISTORY_FILE, 'r', encoding='utf-8') as f:
                     lines = f.read().splitlines()
-                self.history_lines = lines[-self.settings['history_lines']:]
+                self.history_lines = lines[-self.settings.history_lines:]
             except Exception as e:
-                print("Could not load history:", e)
+                logger.error("Could not load history: %s", e)
 
     def _render_history(self):
         self.text.clear()
@@ -269,7 +274,7 @@ class Overlay(QWidget):
 
     def _render_live(self):
         self.text.clear()
-        num_hist = self.settings['max_lines'] - 1 if self.partial_text else self.settings['max_lines']
+        num_hist = self.settings.max_lines - 1 if self.partial_text else self.settings.max_lines
         hist_to_show = self.history_lines[-num_hist:] if num_hist > 0 else []
         for line in hist_to_show:
             self.text.appendPlainText(line)
@@ -297,28 +302,28 @@ class Overlay(QWidget):
             self.text_q,
             devices,
             self.asr_model,
-            self.settings['vad_mode'],
-            self.settings['frame_ms'],
-            self.settings['max_silence_ms'],
-            self.settings['partial_interval_ms'],
-            self.settings['min_frames'],
-            self.settings['max_frames']
+            self.settings.vad_mode,
+            self.settings.frame_ms,
+            self.settings.max_silence_ms,
+            self.settings.partial_interval_ms,
+            self.settings.min_frames,
+            self.settings.max_frames
         )
         self.transcriber.start()
         # persist selected input device
-        self.settings['input_device'] = devices[0]
+        self.settings.input_device = devices[0]
         settings.save_settings(self.settings)
 
     def _apply_appearance(self):
         # update font size and window opacity
         font = self.text.font()
-        font.setPointSize(self.settings.get('appearance', {}).get('font_size', 16))
-        font.setFamily(self.settings.get('appearance', {}).get('font_family', 'Courier'))
+        font.setPointSize(self.settings.appearance.font_size)
+        font.setFamily(self.settings.appearance.font_family)
         self.text.setFont(font)
-        opacity = self.settings.get('appearance', {}).get('opacity', 0.8)
+        opacity = self.settings.appearance.opacity
         self.setWindowOpacity(opacity)
-        bg = self.settings.get('appearance', {}).get('background_color', 'rgba(0,0,0,0.7)')
-        color = self.settings.get('appearance', {}).get('text_color', '#FFFFFF')
+        bg = self.settings.appearance.background_color
+        color = self.settings.appearance.text_color
         self.text.setStyleSheet(f"background:{bg}; color:{color}; border:none;")
 
     def _start_poll(self):
@@ -328,13 +333,13 @@ class Overlay(QWidget):
 
     def _append_history(self, text: str) -> None:
         self.history_lines.append(text)
-        if len(self.history_lines) > self.settings['history_lines']:
+        if len(self.history_lines) > self.settings.history_lines:
             self.history_lines.pop(0)
         try:
-            with open(HISTORY_FILE, 'a', encoding='utf-8') as f:
+            with open(constants.HISTORY_FILE, 'a', encoding='utf-8') as f:
                 f.write(text + '\n')
         except Exception as e:
-            print(f"Could not write history: {e}")
+            logger.error("Could not write history: %s", e)
 
     def _poll(self):
         updated = False
@@ -355,7 +360,7 @@ class Overlay(QWidget):
             else:
                 self._render_live()
             self.clear_timer.stop()
-            self.clear_timer.start(self.settings['clear_timeout'])
+            self.clear_timer.start(self.settings.clear_timeout)
 
     def _clear(self):
         if not self.show_history:

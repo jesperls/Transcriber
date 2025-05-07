@@ -1,10 +1,12 @@
 import numpy as np
+import scipy.signal
 
 def resample_pcm(pcm: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
     if orig_sr == target_sr:
         return pcm
-    duration = pcm.shape[0] / orig_sr
-    new_len = int(duration * target_sr)
-    src_indices = np.arange(pcm.shape[0])
-    tgt_indices = np.linspace(0, pcm.shape[0] - 1, new_len)
-    return np.interp(tgt_indices, src_indices, pcm).astype(np.int16)
+    new_len = int(len(pcm) * (target_sr / orig_sr))
+    # resample to new length, output float64
+    resampled = scipy.signal.resample(pcm, new_len)
+    # clip and convert to int16
+    resampled = np.clip(resampled, np.iinfo(np.int16).min, np.iinfo(np.int16).max)
+    return resampled.astype(np.int16)
